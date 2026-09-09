@@ -367,11 +367,12 @@ label {
   display: grid;
   grid-template-columns: 22px minmax(0, 620px) minmax(190px, 1fr);
   gap: 16px;
-  align-items: stretch;
+  align-items: start;
   padding-top: 28px;
 }
 
 .evaluation {
+  align-self: stretch;
   position: relative;
   min-height: 0;
   overflow: hidden;
@@ -400,10 +401,13 @@ label {
 }
 
 .board {
+  position: relative;
   display: grid;
-  width: 100%;
+  width: min(100%, 620px);
   aspect-ratio: 1;
   grid-template-columns: repeat(8, 1fr);
+  grid-template-rows: repeat(8, 1fr);
+  align-self: start;
   overflow: hidden;
   border: 1px solid #8b6c4b;
   border-radius: 4px;
@@ -445,6 +449,25 @@ label {
   filter: drop-shadow(0 1px 1px #0004);
 }
 
+.moving-piece {
+  position: absolute;
+  z-index: 2;
+  display: grid;
+  width: 12.5%;
+  aspect-ratio: 1;
+  place-items: center;
+  color: inherit;
+  font-size: clamp(26px, 6.2vw, 54px);
+  line-height: 1;
+  pointer-events: none;
+  filter: drop-shadow(0 1px 1px #0004);
+  transition: transform 360ms ease-in-out;
+}
+
+.moving-piece.active {
+  transform: translate(var(--destination-x), var(--destination-y)) !important;
+}
+
 .review-panel {
   display: flex;
   min-height: 100%;
@@ -465,8 +488,39 @@ label {
 .review-actions .primary,
 .review-actions .quiet-button {
   min-height: 39px;
-  flex: 1;
   padding: 0 12px;
+}
+.review-actions .primary {
+  min-width: 82px;
+}
+
+.daily-statistics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 8px;
+  border-top: 1px solid #d5dad2;
+  border-bottom: 1px solid #d5dad2;
+}
+
+.daily-statistics div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-height: 62px;
+}
+
+.daily-statistics div + div {
+  justify-content: flex-end;
+}
+
+.daily-statistics strong {
+  color: #3e5632;
+  font-size: 27px;
+}
+
+.daily-statistics span {
+  color: #747b71;
+  font-size: 13px;
 }
 .quiet-button {
   padding: 0 12px;

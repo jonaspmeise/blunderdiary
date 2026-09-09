@@ -12,6 +12,7 @@ import {
   type Fen,
   type IssueCategory,
   type MatchRecord,
+  type PawnEvaluation,
   type SanMove,
   type Side,
   type UciMove,
@@ -25,6 +26,18 @@ export interface BoardPiece {
   readonly square: Square;
   readonly color: ChessColor;
   readonly type: PieceType;
+}
+
+export interface MoveAnimation {
+  readonly from: Square;
+  readonly to: Square;
+  readonly piece: BoardPiece;
+}
+
+export interface ReviewEvaluation {
+  readonly before: PawnEvaluation;
+  readonly after: PawnEvaluation;
+  readonly loss: PawnEvaluation;
 }
 
 export const boardSquares = (side: Side): readonly Square[] => {
@@ -66,6 +79,40 @@ export const tryMove = (
     const chess = new Chess(fen);
     const move = chess.move({ from, to, promotion: 'q' });
     return move ? { fen: asFen(chess.fen()), san: asSanMove(move.san) } : null;
+  } catch {
+    return null;
+  }
+};
+
+export const evaluateReviewMove = async (
+  fenBefore: Fen,
+  fenAfter: Fen,
+  playerSide: Side,
+  engine: StockfishEngine
+): Promise<ReviewEvaluation> => {
+  const beforeEvaluation = await engine.evaluate(fenBefore);
+  const afterEvaluation = await engine.evaluate(fenAfter);
+  const perspective = playerSide === SIDES.white ? 1 : -1;
+  const before = asPawnEvaluation(beforeEvaluation.score * perspective);
+  const after = asPawnEvaluation(afterEvaluation.score * perspective);
+  return { before, after, loss: asPawnEvaluation(before - after) };
+};
+
+export const moveAnimationFor = (fen: Fen, san: SanMove): MoveAnimation | null => {
+  try {
+    const chess = new Chess(fen);
+    const move = chess.move(san);
+    return move
+      ? {
+          from: move.from,
+          to: move.to,
+          piece: {
+            square: move.from,
+            color: move.color,
+            type: move.piece,
+          },
+        }
+      : null;
   } catch {
     return null;
   }
@@ -146,12 +193,15 @@ export const analyzeMatch = async (
       fenToSolve: fenBefore,
       opponentMove: asSanMove(history[index - 1]),
       playedMove: asSanMove(played.san),
+      turn: Math.floor(index / 2) + 1,
       bestMoves: sanMovesFromUci(fenBefore, before.bestMoves),
       category,
       evaluation: asPawnEvaluation(after.score),
+      evaluationBeforeMove: asPawnEvaluation(before.score),
+      loss: asPawnEvaluation(loss),
     });
   }
-  return candidates;
+  return candidates.sort((left, right) => right.loss - left.loss);
 };
 
 export const loadPositionAfterMove = (fen: Fen, move: SanMove): Fen => {

@@ -1,7 +1,7 @@
 import { RefreshCw, Sparkles, UserRound } from 'lucide-react';
-import { SIDES, type DiaryDatabase, type ReviewProblem } from '../domain';
+import type { DiaryDatabase } from '../domain';
 import type { ImportProgress } from '../services/chessCom';
-import { dueProblems } from '../storage';
+import { dueProblems, passedProblemsToday } from '../storage';
 
 interface DashboardProps {
   readonly database: DiaryDatabase;
@@ -11,17 +11,9 @@ interface DashboardProps {
   readonly onSync: () => void;
 }
 
-const positionLabel = (database: DiaryDatabase, problem: ReviewProblem): string => {
-  const match = database.matches[problem.matchId];
-  return match
-    ? `${match.players[SIDES.white].username} vs ${match.players[SIDES.black].username}`
-    : 'Archived game';
-};
-
 export function Dashboard({ database, isSyncing, progress, onReview, onSync }: DashboardProps) {
   const due = dueProblems(database);
-  const problems = Object.values(database.problems).sort((left, right) => left.dueAt - right.dueAt);
-  const recoveries = problems.reduce((total, problem) => total + problem.successes, 0);
+  const passedToday = passedProblemsToday(database);
   return (
     <main className="dashboard">
       <header className="app-header">
@@ -42,19 +34,19 @@ export function Dashboard({ database, isSyncing, progress, onReview, onSync }: D
         <div>
           <span className="eyebrow">today</span>
           <h1>
-            {isSyncing && problems.length === 0
+            {isSyncing && due.length === 0
               ? 'Reading games.'
               : due.length
-                ? `${due.length} positions`
+                ? 'Ready to review.'
                 : 'All clear.'}
           </h1>
           <p>
             {isSyncing
               ? progress?.totalGames
-                ? `${progress.completedGames} / ${progress.totalGames} games`
+                ? 'Analyzing recent games in the background.'
                 : 'Connecting to Chess.com'
               : due.length
-                ? 'Ready when you are.'
+                ? 'A position is ready.'
                 : 'No positions due right now.'}
           </p>
         </div>
@@ -63,45 +55,23 @@ export function Dashboard({ database, isSyncing, progress, onReview, onSync }: D
           <span>Review</span>
         </button>
       </section>
-      <section className="ledger">
-        <div className="metric">
-          <span>recovered</span>
-          <strong>{recoveries}</strong>
+      <section className="daily-statistics" aria-label="Today's review statistics">
+        <div>
+          <strong>{passedToday}</strong>
+          <span>passed today</span>
         </div>
-        <div className="metric">
-          <span>in queue</span>
-          <strong>{problems.length}</strong>
+        <div>
+          <strong>{due.length}</strong>
+          <span>left today</span>
         </div>
       </section>
-      <section className="position-list" aria-label="Review positions">
-        <div className="section-title">
-          <h2>Positions</h2>
-          <span>{problems.length}</span>
+      {isSyncing && due.length === 0 && (
+        <div className="position-skeleton" aria-label="Loading positions">
+          <span />
+          <span />
+          <span />
         </div>
-        {isSyncing && problems.length === 0 ? (
-          <div className="position-skeleton" aria-label="Loading positions">
-            <span />
-            <span />
-            <span />
-          </div>
-        ) : problems.length === 0 ? (
-          <p className="empty-state">Import a game to begin.</p>
-        ) : (
-          problems.slice(0, 8).map((problem) => (
-            <div className="position-row" key={problem.id}>
-              <span className={`tag ${problem.category}`}>{problem.category}</span>
-              <span>{positionLabel(database, problem)}</span>
-              <time>
-                {problem.dueAt <= Date.now()
-                  ? 'now'
-                  : new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(
-                      problem.dueAt
-                    )}
-              </time>
-            </div>
-          ))
-        )}
-      </section>
+      )}
     </main>
   );
 }

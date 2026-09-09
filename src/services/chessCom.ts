@@ -1,5 +1,5 @@
 import { analyzeMatch } from '../chess';
-import { MAX_RECENT_ARCHIVES } from '../constants';
+import { ANALYSIS_VERSION, MAX_PROBLEMS_PER_MATCH, MAX_RECENT_ARCHIVES } from '../constants';
 import {
   asAvatarUrl,
   asEloRating,
@@ -22,9 +22,9 @@ import {
 import { StockfishEngine } from '../engine';
 import {
   markMatchAnalyzed,
+  replaceProblemsForMatch,
   saveDatabase,
   upsertMatch,
-  upsertProblem,
   upsertProfile,
 } from '../storage';
 
@@ -72,10 +72,9 @@ const toMatch = (game: ChessComGame): MatchRecord => ({
 const toProblem = (
   match: MatchRecord,
   side: Side,
-  candidate: AnalysisCandidate,
-  index: number
+  candidate: AnalysisCandidate
 ): ReviewProblem => ({
-  id: `${match.id}:${candidate.playedMove}:${index}` as ProblemId,
+  id: `${match.id}:${candidate.turn}` as ProblemId,
   matchId: match.id,
   playerSide: side,
   ...candidate,
@@ -84,6 +83,7 @@ const toProblem = (
   successes: asReviewCount(0),
   intervalDays: asIntervalDays(0),
   lastReviewedAt: null,
+  lastOutcome: null,
 });
 
 const fetchGames = async (username: ChessComUsername): Promise<readonly ChessComGame[]> => {
@@ -138,7 +138,7 @@ export const importGames = async (
   try {
     for (const game of games) {
       const match = toMatch(game);
-      if (next.analyzedMatchIds[match.id]) {
+      if (next.analyzedMatchIds[match.id] === ANALYSIS_VERSION) {
         completedGames += 1;
         onProgress?.({ completedGames, totalGames: games.length, discoveredProblems });
         continue;
@@ -152,10 +152,14 @@ export const importGames = async (
           : SIDES.black;
       const candidates = await analyzeMatch(match, username, engine);
       discoveredProblems += candidates.length;
-      candidates.forEach((candidate, index) => {
-        next = upsertProblem(next, toProblem(match, side, candidate, index));
-      });
-      next = markMatchAnalyzed(next, match.id);
+      next = replaceProblemsForMatch(
+        next,
+        match.id,
+        candidates
+          .slice(0, MAX_PROBLEMS_PER_MATCH)
+          .map((candidate) => toProblem(match, side, candidate))
+      );
+      next = markMatchAnalyzed(next, match.id, ANALYSIS_VERSION);
       completedGames += 1;
       saveDatabase(next);
       onUpdate?.(next);

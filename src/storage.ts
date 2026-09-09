@@ -7,6 +7,7 @@ import {
 } from './constants';
 import {
   asIntervalDays,
+  asPawnEvaluation,
   asReviewCount,
   asTimestamp,
   REVIEW_OUTCOMES,
@@ -36,13 +37,30 @@ export const loadDatabase = (): DiaryDatabase => {
       return emptyDatabase();
     }
     const parsed = JSON.parse(value) as Partial<DiaryDatabase>;
+    const analyzedMatchIds = Object.fromEntries(
+      Object.entries(parsed.analyzedMatchIds ?? {}).map(([matchId, version]) => [
+        matchId,
+        typeof version === 'number' ? version : 0,
+      ])
+    ) as DiaryDatabase['analyzedMatchIds'];
+    const problems = Object.fromEntries(
+      Object.entries(parsed.problems ?? {}).map(([problemId, problem]) => [
+        problemId,
+        {
+          ...problem,
+          evaluationBeforeMove: problem.evaluationBeforeMove ?? problem.evaluation,
+          loss: problem.loss ?? asPawnEvaluation(0),
+          lastOutcome: problem.lastOutcome ?? null,
+        },
+      ])
+    ) as DiaryDatabase['problems'];
     return {
       profile: parsed.profile
         ? { ...parsed.profile, avatarUrl: parsed.profile.avatarUrl ?? null }
         : null,
       matches: parsed.matches ?? {},
-      analyzedMatchIds: parsed.analyzedMatchIds ?? {},
-      problems: parsed.problems ?? {},
+      analyzedMatchIds,
+      problems,
     };
   } catch {
     return emptyDatabase();
@@ -67,14 +85,32 @@ export const upsertMatch = (database: DiaryDatabase, match: MatchRecord): DiaryD
   matches: { ...database.matches, [match.id]: match },
 });
 
-export const markMatchAnalyzed = (database: DiaryDatabase, matchId: MatchId): DiaryDatabase => ({
+export const markMatchAnalyzed = (
+  database: DiaryDatabase,
+  matchId: MatchId,
+  version: number
+): DiaryDatabase => ({
   ...database,
-  analyzedMatchIds: { ...database.analyzedMatchIds, [matchId]: true },
+  analyzedMatchIds: { ...database.analyzedMatchIds, [matchId]: version },
 });
 
 export const upsertProblem = (database: DiaryDatabase, problem: ReviewProblem): DiaryDatabase => ({
   ...database,
   problems: { ...database.problems, [problem.id]: problem },
+});
+
+export const replaceProblemsForMatch = (
+  database: DiaryDatabase,
+  matchId: MatchId,
+  problems: readonly ReviewProblem[]
+): DiaryDatabase => ({
+  ...database,
+  problems: {
+    ...Object.fromEntries(
+      Object.entries(database.problems).filter(([, problem]) => problem.matchId !== matchId)
+    ),
+    ...Object.fromEntries(problems.map((problem) => [problem.id, problem])),
+  },
 });
 
 export const dueProblems = (
@@ -83,7 +119,26 @@ export const dueProblems = (
 ): readonly ReviewProblem[] =>
   Object.values(database.problems)
     .filter((problem) => problem.dueAt <= now)
-    .sort((left, right) => left.dueAt - right.dueAt);
+    .sort((left, right) => right.loss - left.loss || left.dueAt - right.dueAt);
+
+export const passedProblemsToday = (database: DiaryDatabase, now = new Date()): number =>
+  Object.values(database.problems).filter((problem) => {
+    if (
+      problem.lastOutcome !== REVIEW_OUTCOMES.best &&
+      problem.lastOutcome !== REVIEW_OUTCOMES.good
+    ) {
+      return false;
+    }
+    if (problem.lastReviewedAt === null) {
+      return false;
+    }
+    const reviewedAt = new Date(problem.lastReviewedAt);
+    return (
+      reviewedAt.getFullYear() === now.getFullYear() &&
+      reviewedAt.getMonth() === now.getMonth() &&
+      reviewedAt.getDate() === now.getDate()
+    );
+  }).length;
 
 export const applyReview = (
   problem: ReviewProblem,
@@ -91,7 +146,12 @@ export const applyReview = (
   now = currentTime()
 ): ReviewProblem => {
   if (outcome === REVIEW_OUTCOMES.skipped) {
-    return { ...problem, dueAt: asTimestamp(now + SKIPPED_REVIEW_DELAY_MS), lastReviewedAt: now };
+    return {
+      ...problem,
+      dueAt: asTimestamp(now + SKIPPED_REVIEW_DELAY_MS),
+      lastReviewedAt: now,
+      lastOutcome: outcome,
+    };
   }
   if (outcome === REVIEW_OUTCOMES.failed) {
     return {
@@ -100,6 +160,7 @@ export const applyReview = (
       intervalDays: asIntervalDays(0),
       dueAt: now,
       lastReviewedAt: now,
+      lastOutcome: outcome,
     };
   }
 
@@ -119,5 +180,6 @@ export const applyReview = (
     intervalDays: asIntervalDays(nextInterval),
     dueAt: asTimestamp(now + nextInterval * DAY_MS),
     lastReviewedAt: now,
+    lastOutcome: outcome,
   };
 };

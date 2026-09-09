@@ -78,20 +78,24 @@ export interface ReviewProblem {
   fenToSolve: Fen;
   opponentMove: SanMove;
   playedMove: SanMove;
+  turn: number;
   bestMoves: readonly SanMove[];
   category: IssueCategory;
   evaluation: PawnEvaluation;
+  evaluationBeforeMove: PawnEvaluation;
+  loss: PawnEvaluation;
   dueAt: Timestamp;
   failures: ReviewCount;
   successes: ReviewCount;
   intervalDays: IntervalDays;
   lastReviewedAt: Timestamp | null;
+  lastOutcome: ReviewOutcome | null;
 }
 
 export interface DiaryDatabase {
   profile: PlayerProfile | null;
   matches: Readonly<Record<MatchId, MatchRecord>>;
-  analyzedMatchIds: Readonly<Partial<Record<MatchId, true>>>;
+  analyzedMatchIds: Readonly<Partial<Record<MatchId, number>>>;
   problems: Readonly<Record<ProblemId, ReviewProblem>>;
 }
 
@@ -100,7 +104,10 @@ export interface AnalysisCandidate {
   fenToSolve: Fen;
   opponentMove: SanMove;
   playedMove: SanMove;
+  turn: number;
   bestMoves: readonly SanMove[];
   category: IssueCategory;
   evaluation: PawnEvaluation;
+  evaluationBeforeMove: PawnEvaluation;
+  loss: PawnEvaluation;
 }
