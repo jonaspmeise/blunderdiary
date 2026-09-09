@@ -1,6 +1,7 @@
 import { analyzeMatch } from '../chess';
 import { MAX_RECENT_ARCHIVES } from '../constants';
 import {
+  asAvatarUrl,
   asEloRating,
   asIntervalDays,
   asMatchId,
@@ -19,7 +20,13 @@ import {
   type Side,
 } from '../domain';
 import { StockfishEngine } from '../engine';
-import { saveDatabase, upsertMatch, upsertProblem, upsertProfile } from '../storage';
+import {
+  markMatchAnalyzed,
+  saveDatabase,
+  upsertMatch,
+  upsertProblem,
+  upsertProfile,
+} from '../storage';
 
 interface ChessComGame {
   readonly uuid: string;
@@ -28,6 +35,16 @@ interface ChessComGame {
   readonly end_time: number;
   readonly pgn: string;
   readonly url: string;
+}
+
+interface ChessComProfile {
+  readonly avatar?: string;
+}
+
+export interface ImportProgress {
+  readonly completedGames: number;
+  readonly totalGames: number;
+  readonly discoveredProblems: number;
 }
 
 const resultFromPgn = (pgn: string): MatchResult => {
@@ -91,29 +108,58 @@ const fetchGames = async (username: ChessComUsername): Promise<readonly ChessCom
   return archives.flatMap((archive) => archive.games);
 };
 
+const fetchProfile = async (username: ChessComUsername): Promise<ChessComProfile> => {
+  const response = await fetch(`https://api.chess.com/pub/player/${encodeURIComponent(username)}`);
+  if (!response.ok) {
+    throw new Error('Chess.com player not found');
+  }
+  return response.json() as Promise<ChessComProfile>;
+};
+
 export const importGames = async (
   rawUsername: string,
-  database: DiaryDatabase
+  database: DiaryDatabase,
+  onUpdate?: (database: DiaryDatabase) => void,
+  onProgress?: (progress: ImportProgress) => void
 ): Promise<DiaryDatabase> => {
   const username = asUsername(rawUsername);
-  const games = await fetchGames(username);
-  let next = upsertProfile(database, { username, updatedAt: asTimestamp(Date.now()) });
+  const [profile, loadedGames] = await Promise.all([fetchProfile(username), fetchGames(username)]);
+  const games = loadedGames;
+  let next = upsertProfile(database, {
+    username,
+    avatarUrl: profile.avatar ? asAvatarUrl(profile.avatar) : null,
+    updatedAt: asTimestamp(Date.now()),
+  });
+  saveDatabase(next);
+  onUpdate?.(next);
   const engine = await StockfishEngine.create();
+  let completedGames = 0;
+  let discoveredProblems = 0;
   try {
     for (const game of games) {
       const match = toMatch(game);
-      if (next.matches[match.id]) {
+      if (next.analyzedMatchIds[match.id]) {
+        completedGames += 1;
+        onProgress?.({ completedGames, totalGames: games.length, discoveredProblems });
         continue;
       }
       next = upsertMatch(next, match);
+      saveDatabase(next);
+      onUpdate?.(next);
       const side =
         match.players[SIDES.white].username.toLowerCase() === username.toLowerCase()
           ? SIDES.white
           : SIDES.black;
       const candidates = await analyzeMatch(match, username, engine);
+      discoveredProblems += candidates.length;
       candidates.forEach((candidate, index) => {
         next = upsertProblem(next, toProblem(match, side, candidate, index));
       });
+      next = markMatchAnalyzed(next, match.id);
+      completedGames += 1;
+      saveDatabase(next);
+      onUpdate?.(next);
+      onProgress?.({ completedGames, totalGames: games.length, discoveredProblems });
     }
   } finally {
     engine.dispose();

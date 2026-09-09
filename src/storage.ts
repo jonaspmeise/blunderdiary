@@ -11,6 +11,7 @@ import {
   asTimestamp,
   REVIEW_OUTCOMES,
   type DiaryDatabase,
+  type MatchId,
   type MatchRecord,
   type PlayerProfile,
   type ReviewOutcome,
@@ -19,13 +20,30 @@ import {
 } from './domain';
 
 const STORAGE_KEY = 'blunder-diary/v2';
-const emptyDatabase = (): DiaryDatabase => ({ profile: null, matches: {}, problems: {} });
+const LAST_USERNAME_KEY = 'blunder-diary/last-username';
+const emptyDatabase = (): DiaryDatabase => ({
+  profile: null,
+  matches: {},
+  analyzedMatchIds: {},
+  problems: {},
+});
 const currentTime = (): Timestamp => asTimestamp(Date.now());
 
 export const loadDatabase = (): DiaryDatabase => {
   try {
     const value = localStorage.getItem(STORAGE_KEY);
-    return value ? (JSON.parse(value) as DiaryDatabase) : emptyDatabase();
+    if (!value) {
+      return emptyDatabase();
+    }
+    const parsed = JSON.parse(value) as Partial<DiaryDatabase>;
+    return {
+      profile: parsed.profile
+        ? { ...parsed.profile, avatarUrl: parsed.profile.avatarUrl ?? null }
+        : null,
+      matches: parsed.matches ?? {},
+      analyzedMatchIds: parsed.analyzedMatchIds ?? {},
+      problems: parsed.problems ?? {},
+    };
   } catch {
     return emptyDatabase();
   }
@@ -33,6 +51,11 @@ export const loadDatabase = (): DiaryDatabase => {
 
 export const saveDatabase = (database: DiaryDatabase): void =>
   localStorage.setItem(STORAGE_KEY, JSON.stringify(database));
+
+export const loadLastUsername = (): string => localStorage.getItem(LAST_USERNAME_KEY) ?? '';
+
+export const saveLastUsername = (username: string): void =>
+  localStorage.setItem(LAST_USERNAME_KEY, username);
 
 export const upsertProfile = (database: DiaryDatabase, profile: PlayerProfile): DiaryDatabase => ({
   ...database,
@@ -42,6 +65,11 @@ export const upsertProfile = (database: DiaryDatabase, profile: PlayerProfile): 
 export const upsertMatch = (database: DiaryDatabase, match: MatchRecord): DiaryDatabase => ({
   ...database,
   matches: { ...database.matches, [match.id]: match },
+});
+
+export const markMatchAnalyzed = (database: DiaryDatabase, matchId: MatchId): DiaryDatabase => ({
+  ...database,
+  analyzedMatchIds: { ...database.analyzedMatchIds, [matchId]: true },
 });
 
 export const upsertProblem = (database: DiaryDatabase, problem: ReviewProblem): DiaryDatabase => ({

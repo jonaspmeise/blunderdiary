@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { applyReview, dueProblems, loadDatabase, saveDatabase, upsertProblem } from '../storage';
 import type { DiaryDatabase, ReviewOutcome, ReviewProblem } from '../domain';
 import { importGames } from '../services/chessCom';
+import type { ImportProgress } from '../services/chessCom';
+import { saveLastUsername } from '../storage';
 import { Dashboard } from './Dashboard';
 import { Review } from './Review';
 import { Setup } from './Setup';
@@ -12,6 +14,7 @@ export function App() {
   const [database, setDatabase] = useState<DiaryDatabase>(loadDatabase);
   const [screen, setScreen] = useState<Screen>('dashboard');
   const [isSyncing, setIsSyncing] = useState(false);
+  const [progress, setProgress] = useState<ImportProgress | null>(null);
   const bootSynced = useRef(false);
   const currentProblem = dueProblems(database)[0];
   const commit = (next: DiaryDatabase) => {
@@ -22,11 +25,15 @@ export function App() {
     if (!username) {
       return;
     }
+    bootSynced.current = true;
+    saveLastUsername(username);
     setIsSyncing(true);
+    setProgress({ completedGames: 0, totalGames: 0, discoveredProblems: 0 });
     try {
-      commit(await importGames(username, database));
+      commit(await importGames(username, database, commit, setProgress));
     } finally {
       setIsSyncing(false);
+      setProgress(null);
     }
   };
   useEffect(() => {
@@ -55,6 +62,7 @@ export function App() {
         <Dashboard
           database={database}
           isSyncing={isSyncing}
+          progress={progress}
           onReview={() => setScreen('review')}
           onSync={() => void sync()}
         />

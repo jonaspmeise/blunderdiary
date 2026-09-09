@@ -1,8 +1,9 @@
 import { ArrowRight } from 'lucide-react';
 import { useState, type FormEvent } from 'react';
+import { loadLastUsername, saveLastUsername } from '../storage';
 
 export function Setup({ onImport }: { readonly onImport: (username: string) => Promise<void> }) {
-  const [username, setUsername] = useState('');
+  const [username, setUsername] = useState(loadLastUsername);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const submit = async (event: FormEvent) => {
@@ -30,7 +31,10 @@ export function Setup({ onImport }: { readonly onImport: (username: string) => P
             <input
               id="username"
               value={username}
-              onChange={(event) => setUsername(event.target.value)}
+              onChange={(event) => {
+                setUsername(event.target.value);
+                saveLastUsername(event.target.value);
+              }}
               placeholder="username"
               autoComplete="username"
             />

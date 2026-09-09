@@ -10,6 +10,7 @@ export type ProblemId = Brand<string, 'ProblemId'>;
 export type Fen = Brand<string, 'Fen'>;
 export type SanMove = Brand<string, 'SanMove'>;
 export type UciMove = Brand<string, 'UciMove'>;
+export type AvatarUrl = Brand<string, 'AvatarUrl'>;
 export type Timestamp = Brand<number, 'Timestamp'>;
 export type EloRating = Brand<number, 'EloRating'>;
 export type ReviewCount = Brand<number, 'ReviewCount'>;
@@ -22,6 +23,7 @@ export const asMatchId = (value: string): MatchId => value as MatchId;
 export const asFen = (value: string): Fen => value as Fen;
 export const asSanMove = (value: string): SanMove => value as SanMove;
 export const asUciMove = (value: string): UciMove => value as UciMove;
+export const asAvatarUrl = (value: string): AvatarUrl => value as AvatarUrl;
 export const asTimestamp = (value: number): Timestamp => value as Timestamp;
 export const asEloRating = (value: number): EloRating => value as EloRating;
 export const asReviewCount = (value: number): ReviewCount => value as ReviewCount;
@@ -51,6 +53,7 @@ export type MatchResult = (typeof MATCH_RESULTS)[number];
 
 export interface PlayerProfile {
   username: ChessComUsername;
+  avatarUrl: AvatarUrl | null;
   updatedAt: Timestamp;
 }
 
@@ -88,6 +91,7 @@ export interface ReviewProblem {
 export interface DiaryDatabase {
   profile: PlayerProfile | null;
   matches: Readonly<Record<MatchId, MatchRecord>>;
+  analyzedMatchIds: Readonly<Partial<Record<MatchId, true>>>;
   problems: Readonly<Record<ProblemId, ReviewProblem>>;
 }
 

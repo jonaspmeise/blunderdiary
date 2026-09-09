@@ -206,6 +206,13 @@ label {
   font-size: 13px;
 }
 
+.avatar {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
 .queue-hero {
   display: flex;
   align-items: end;
@@ -329,6 +336,21 @@ label {
   border-top: 1px solid #d5dad2;
   color: #747b71;
   font-size: 14px;
+}
+
+.position-skeleton {
+  display: grid;
+  gap: 10px;
+  padding-top: 10px;
+}
+
+.position-skeleton span {
+  display: block;
+  height: 46px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, #e3e7e0 20%, #f3f5f1 45%, #e3e7e0 70%);
+  background-size: 220% 100%;
+  animation: shimmer 1.25s linear infinite;
 }
 
 .review-header > span:nth-of-type(1) {
@@ -464,6 +486,12 @@ label {
 @keyframes spin {
   to {
     transform: rotate(360deg);
+  }
+}
+
+@keyframes shimmer {
+  to {
+    background-position: -220% 0;
   }
 }
 
