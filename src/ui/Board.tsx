@@ -3,20 +3,30 @@ import {
   legalTargets,
   piecesForFen,
   type MoveAnimation,
+  type PieceType,
   type Square,
 } from '../chess';
 import type { CSSProperties } from 'react';
 import { BOARD_DIMENSION } from '../constants';
-import { CHESS_COLORS, type Fen, type Side } from '../domain';
+import { type ChessColor, type Fen, type Side } from '../domain';
 
-const PIECES = {
-  p: { w: '♙', b: '♟' },
-  n: { w: '♘', b: '♞' },
-  b: { w: '♗', b: '♝' },
-  r: { w: '♖', b: '♜' },
-  q: { w: '♕', b: '♛' },
-  k: { w: '♔', b: '♚' },
-} as const;
+interface PieceIconProps {
+  readonly type: PieceType;
+  readonly color: ChessColor;
+  readonly className?: string;
+}
+
+export function PieceIcon({ type, color, className }: PieceIconProps) {
+  return (
+    <img
+      className={`piece ${className ?? ''}`}
+      src={`https://images.chesscomfiles.com/chess-themes/pieces/neo/150/${color}${type}.png`}
+      alt=""
+      aria-hidden="true"
+      draggable={false}
+    />
+  );
+}
 
 interface BoardProps {
   readonly fen: Fen;
@@ -24,6 +34,7 @@ interface BoardProps {
   readonly selectedSquare: Square | null;
   readonly animation: MoveAnimation | null;
   readonly isAnimating: boolean;
+  readonly targetLabels: Readonly<Partial<Record<Square, string>>>;
   readonly onSquareSelect: (square: Square) => void;
 }
 
@@ -33,6 +44,7 @@ export function Board({
   selectedSquare,
   animation,
   isAnimating,
+  targetLabels,
   onSquareSelect,
 }: BoardProps) {
   const pieces = new Map(piecesForFen(fen).map((piece) => [piece.square, piece]));
@@ -58,17 +70,16 @@ export function Board({
             onClick={() => onSquareSelect(square)}
             aria-label={square}
           >
-            {piece && (
-              <span className="piece">
-                {PIECES[piece.type][piece.color === CHESS_COLORS.white ? 'w' : 'b']}
-              </span>
+            {piece && <PieceIcon type={piece.type} color={piece.color} />}
+            {targetLabels[square] && (
+              <span className="move-evaluation">{targetLabels[square]}</span>
             )}
           </button>
         );
       })}
       {animation && (
         <span className={`moving-piece${isAnimating ? ' active' : ''}`} style={animationStyle}>
-          {PIECES[animation.piece.type][animation.piece.color === CHESS_COLORS.white ? 'w' : 'b']}
+          <PieceIcon type={animation.piece.type} color={animation.piece.color} />
         </span>
       )}
     </div>

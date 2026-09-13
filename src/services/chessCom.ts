@@ -54,6 +54,7 @@ const resultFromPgn = (pgn: string): MatchResult => {
 
 const toMatch = (game: ChessComGame): MatchRecord => ({
   id: asMatchId(game.uuid || game.url),
+  gameUrl: game.url,
   players: {
     [SIDES.white]: {
       username: asUsername(game.white.username),

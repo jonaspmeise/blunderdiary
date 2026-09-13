@@ -188,7 +188,7 @@ label {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 78px;
+  min-height: 96px;
   border-bottom: 1px solid #d5dad2;
 }
 
@@ -204,6 +204,32 @@ label {
 .account-control {
   padding: 0 11px;
   font-size: 13px;
+}
+
+.account-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reset-control {
+  position: absolute;
+  z-index: 3;
+  top: calc(100% + 8px);
+  right: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid #d6b2a8;
+  border-radius: 5px;
+  background: #fbf5f2;
+  color: #893929;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .avatar {
@@ -353,9 +379,92 @@ label {
   animation: shimmer 1.25s linear infinite;
 }
 
-.review-header > span:nth-of-type(1) {
+.review-match {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  justify-items: center;
   color: #6b7369;
-  font-size: 13px;
+  font-size: 12px;
+}
+
+.match-title {
+  color: #303a2c;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.match-players {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.match-players > span:not(:nth-child(2)) {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.match-players .piece {
+  width: 15px;
+  height: 15px;
+}
+
+.game-link {
+  overflow: hidden;
+  max-width: 100%;
+  color: #303a2c;
+  font-size: 14px;
+  font-weight: 800;
+  text-decoration-color: #7ba35c;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-winner {
+  color: #575024;
+  font-weight: 800;
+}
+
+.review-meta,
+.review-statistics {
+  display: flex;
+  align-items: center;
+}
+
+.review-meta {
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.review-statistics {
+  gap: 5px;
+}
+
+.review-stat {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  place-items: center;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.review-stat.remaining {
+  background: #dbe9d1;
+  color: #38532e;
+}
+
+.review-stat.new {
+  background: #d2e8ee;
+  color: #276071;
+}
+
+.review-stat.relearn {
+  background: #f3d6ce;
+  color: #893929;
 }
 
 .icon-button {
@@ -376,28 +485,18 @@ label {
   position: relative;
   min-height: 0;
   overflow: hidden;
-  border-radius: 3px;
-  background: #30332f;
+  width: 28px;
+  border: 1px solid #1f211e;
+  border-radius: 2px;
+  background: #252724;
 }
 
 .evaluation-fill {
   position: absolute;
   bottom: 0;
   width: 100%;
-  background: #f5f4ec;
+  background: #f8f8f3;
   transition: height 240ms ease;
-}
-
-.evaluation span {
-  position: absolute;
-  bottom: 6px;
-  width: 100%;
-  color: #8e968a;
-  font:
-    700 9px/1 ui-monospace,
-    monospace;
-  text-align: center;
-  writing-mode: vertical-rl;
 }
 
 .board {
@@ -446,7 +545,25 @@ label {
 .piece {
   position: relative;
   z-index: 1;
-  filter: drop-shadow(0 1px 1px #0004);
+  width: 76%;
+  height: 76%;
+  object-fit: contain;
+  user-select: none;
+}
+
+.move-evaluation {
+  position: absolute;
+  z-index: 3;
+  right: 3px;
+  bottom: 3px;
+  padding: 2px 3px;
+  border-radius: 2px;
+  background: #1f211ed9;
+  color: #f8f8f3;
+  font:
+    700 10px/1 ui-monospace,
+    monospace;
+  pointer-events: none;
 }
 
 .moving-piece {
@@ -456,11 +573,7 @@ label {
   width: 12.5%;
   aspect-ratio: 1;
   place-items: center;
-  color: inherit;
-  font-size: clamp(26px, 6.2vw, 54px);
-  line-height: 1;
   pointer-events: none;
-  filter: drop-shadow(0 1px 1px #0004);
   transition: transform 360ms ease-in-out;
 }
 
@@ -484,6 +597,13 @@ label {
   gap: 8px;
   margin-top: auto;
   padding-top: 26px;
+}
+
+.review-pending {
+  display: grid;
+  width: 38px;
+  height: 36px;
+  place-items: center;
 }
 .review-actions .primary,
 .review-actions .quiet-button {
@@ -559,6 +679,12 @@ label {
   .review-header {
     min-height: 66px;
   }
+  .review-match {
+    justify-items: start;
+  }
+  .review-meta {
+    gap: 6px;
+  }
   .queue-hero {
     align-items: start;
     flex-direction: column;
@@ -577,6 +703,10 @@ label {
   .review-layout {
     grid-template-columns: 18px minmax(0, 1fr);
     gap: 9px;
+  }
+  .review-layout .board {
+    justify-self: center;
+    transform: translateX(-13.5px);
   }
   .review-panel {
     grid-column: 1 / -1;

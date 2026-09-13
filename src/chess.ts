@@ -1,5 +1,11 @@
 import { Chess } from 'chess.js';
-import { BOARD_FILES, BOARD_RANKS, CENTIPAWNS_PER_PAWN, ISSUE_LOSS_THRESHOLDS } from './constants';
+import {
+  BOARD_FILES,
+  BOARD_RANKS,
+  CENTIPAWNS_PER_PAWN,
+  ISSUE_LOSS_THRESHOLDS,
+  MINIMUM_REVIEW_LOSS,
+} from './constants';
 import {
   asFen,
   asPawnEvaluation,
@@ -17,7 +23,7 @@ import {
   type Side,
   type UciMove,
 } from './domain';
-import type { StockfishEngine } from './engine';
+import type { EngineEvaluation, StockfishEngine } from './engine';
 
 export type Square = `${(typeof BOARD_FILES)[number]}${(typeof BOARD_RANKS)[number]}`;
 export type PieceType = 'p' | 'n' | 'b' | 'r' | 'q' | 'k';
@@ -35,9 +41,32 @@ export interface MoveAnimation {
 }
 
 export interface ReviewEvaluation {
-  readonly before: PawnEvaluation;
-  readonly after: PawnEvaluation;
+  readonly before: PositionEvaluation;
+  readonly after: PositionEvaluation;
   readonly loss: PawnEvaluation;
+  readonly opponentResponse: OpponentResponse | null;
+}
+
+export interface PositionEvaluation {
+  readonly score: PawnEvaluation;
+  readonly mateIn: number | null;
+}
+
+export interface OpponentResponse {
+  readonly san: SanMove;
+  readonly fen: Fen;
+  readonly evaluation: PositionEvaluation;
+}
+
+export interface LegalMove {
+  readonly to: Square;
+  readonly fen: Fen;
+}
+
+export interface LegalMoveEvaluation {
+  readonly to: Square;
+  readonly evaluation: PositionEvaluation;
+  readonly change: PawnEvaluation;
 }
 
 export const boardSquares = (side: Side): readonly Square[] => {
@@ -84,18 +113,72 @@ export const tryMove = (
   }
 };
 
+export const legalMoves = (fen: Fen, from: Square): readonly LegalMove[] =>
+  [...new Set(legalTargets(fen, from))].flatMap((to) => {
+    const move = tryMove(fen, from, to);
+    return move ? [{ to, fen: move.fen }] : [];
+  });
+
+const playerPerspective = (evaluation: EngineEvaluation, side: Side): PositionEvaluation => {
+  const multiplier = side === SIDES.white ? 1 : -1;
+  return {
+    score: asPawnEvaluation(evaluation.score * multiplier),
+    mateIn: evaluation.mateIn === null ? null : evaluation.mateIn * multiplier,
+  };
+};
+
+const moveFromUci = (
+  fen: Fen,
+  uci: UciMove
+): { readonly san: SanMove; readonly fen: Fen } | null => {
+  try {
+    const chess = new Chess(fen);
+    const move = chess.move({ from: uci.slice(0, 2), to: uci.slice(2, 4), promotion: uci[4] });
+    return move ? { san: asSanMove(move.san), fen: asFen(chess.fen()) } : null;
+  } catch {
+    return null;
+  }
+};
+
 export const evaluateReviewMove = async (
   fenBefore: Fen,
   fenAfter: Fen,
   playerSide: Side,
   engine: StockfishEngine
 ): Promise<ReviewEvaluation> => {
-  const beforeEvaluation = await engine.evaluate(fenBefore);
-  const afterEvaluation = await engine.evaluate(fenAfter);
-  const perspective = playerSide === SIDES.white ? 1 : -1;
-  const before = asPawnEvaluation(beforeEvaluation.score * perspective);
-  const after = asPawnEvaluation(afterEvaluation.score * perspective);
-  return { before, after, loss: asPawnEvaluation(before - after) };
+  const before = playerPerspective(await engine.evaluate(fenBefore), playerSide);
+  const afterEngine = await engine.evaluate(fenAfter);
+  const after = playerPerspective(afterEngine, playerSide);
+  const responseMove = afterEngine.bestMoves[0]
+    ? moveFromUci(fenAfter, afterEngine.bestMoves[0])
+    : null;
+  const opponentResponse = responseMove
+    ? {
+        ...responseMove,
+        evaluation: playerPerspective(await engine.evaluate(responseMove.fen), playerSide),
+      }
+    : null;
+  return { before, after, loss: asPawnEvaluation(before.score - after.score), opponentResponse };
+};
+
+export const evaluateLegalMoves = async (
+  fen: Fen,
+  from: Square,
+  playerSide: Side,
+  engine: StockfishEngine
+): Promise<readonly LegalMoveEvaluation[]> => {
+  const before = playerPerspective(await engine.evaluate(fen), playerSide);
+  const moves = legalMoves(fen, from);
+  const evaluations: LegalMoveEvaluation[] = [];
+  for (const move of moves) {
+    const evaluation = playerPerspective(await engine.evaluate(move.fen), playerSide);
+    evaluations.push({
+      to: move.to,
+      evaluation,
+      change: asPawnEvaluation(evaluation.score - before.score),
+    });
+  }
+  return evaluations;
 };
 
 export const moveAnimationFor = (fen: Fen, san: SanMove): MoveAnimation | null => {
@@ -119,6 +202,9 @@ export const moveAnimationFor = (fen: Fen, san: SanMove): MoveAnimation | null =
 };
 
 const categoryForLoss = (loss: number): IssueCategory | null => {
+  if (loss < MINIMUM_REVIEW_LOSS) {
+    return null;
+  }
   if (loss >= ISSUE_LOSS_THRESHOLDS.blunder / CENTIPAWNS_PER_PAWN) {
     return ISSUE_CATEGORIES.blunder;
   }
@@ -174,13 +260,17 @@ export const analyzeMatch = async (
     if (movingSide !== playerSide || index === 0) {
       continue;
     }
+    if (new Chess(fenBefore).moves().length <= 1) {
+      continue;
+    }
 
     const before = await engine.evaluate(fenBefore);
     const after = await engine.evaluate(fenAfter);
     const loss =
       playerSide === SIDES.white ? before.score - after.score : after.score - before.score;
     const category = categoryForLoss(loss);
-    if (!category) {
+    const bestMoves = sanMovesFromUci(fenBefore, before.bestMoves);
+    if (!category || bestMoves.includes(asSanMove(played.san))) {
       continue;
     }
 
@@ -194,10 +284,12 @@ export const analyzeMatch = async (
       opponentMove: asSanMove(history[index - 1]),
       playedMove: asSanMove(played.san),
       turn: Math.floor(index / 2) + 1,
-      bestMoves: sanMovesFromUci(fenBefore, before.bestMoves),
+      bestMoves,
       category,
-      evaluation: asPawnEvaluation(after.score),
-      evaluationBeforeMove: asPawnEvaluation(before.score),
+      evaluation: playerPerspective(after, playerSide).score,
+      evaluationMateIn: playerPerspective(after, playerSide).mateIn,
+      evaluationBeforeMove: playerPerspective(before, playerSide).score,
+      evaluationBeforeMoveMateIn: playerPerspective(before, playerSide).mateIn,
       loss: asPawnEvaluation(loss),
     });
   }

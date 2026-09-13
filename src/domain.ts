@@ -64,6 +64,7 @@ export interface MatchPlayer {
 
 export interface MatchRecord {
   id: MatchId;
+  gameUrl: string | null;
   players: Readonly<Record<Side, MatchPlayer>>;
   playedAt: Timestamp;
   result: MatchResult;
@@ -82,7 +83,9 @@ export interface ReviewProblem {
   bestMoves: readonly SanMove[];
   category: IssueCategory;
   evaluation: PawnEvaluation;
+  evaluationMateIn: number | null;
   evaluationBeforeMove: PawnEvaluation;
+  evaluationBeforeMoveMateIn: number | null;
   loss: PawnEvaluation;
   dueAt: Timestamp;
   failures: ReviewCount;
@@ -108,6 +111,8 @@ export interface AnalysisCandidate {
   bestMoves: readonly SanMove[];
   category: IssueCategory;
   evaluation: PawnEvaluation;
+  evaluationMateIn: number | null;
   evaluationBeforeMove: PawnEvaluation;
+  evaluationBeforeMoveMateIn: number | null;
   loss: PawnEvaluation;
 }

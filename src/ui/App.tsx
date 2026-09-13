@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
-import { applyReview, dueProblems, loadDatabase, saveDatabase, upsertProblem } from '../storage';
+import {
+  applyReview,
+  clearDiaryData,
+  dueProblems,
+  loadDatabase,
+  saveDatabase,
+  upsertProblem,
+} from '../storage';
 import {
   asMatchId,
   type DiaryDatabase,
@@ -7,7 +14,6 @@ import {
   type ReviewOutcome,
   type ReviewProblem,
 } from '../domain';
-import { REVIEW_SEVERITY_WINDOW } from '../constants';
 import { importGames } from '../services/chessCom';
 import type { ImportProgress } from '../services/chessCom';
 import { saveLastUsername } from '../storage';
@@ -44,14 +50,10 @@ const mergeImportedDatabase = (current: DiaryDatabase, imported: DiaryDatabase):
 };
 
 const nextReviewProblem = (problems: readonly ReviewProblem[]): ReviewProblem | null => {
-  const worstLoss = problems[0]?.loss;
-  if (worstLoss === undefined) {
+  if (problems.length === 0) {
     return null;
   }
-  const candidates = problems.filter(
-    (problem) => problem.loss >= worstLoss - REVIEW_SEVERITY_WINDOW
-  );
-  return candidates[Math.floor(Math.random() * candidates.length)] ?? null;
+  return problems[Math.floor(Math.random() * problems.length)] ?? null;
 };
 
 export function App() {
@@ -84,7 +86,10 @@ export function App() {
     window.history.pushState({}, '', url);
     setProblemId(null);
   };
-  const sync = async (username: string | undefined = database.profile?.username) => {
+  const sync = async (
+    username: string | undefined = database.profile?.username,
+    sourceDatabase = databaseRef.current
+  ) => {
     if (!username) {
       return;
     }
@@ -93,13 +98,22 @@ export function App() {
     setIsSyncing(true);
     setProgress({ completedGames: 0, totalGames: 0, discoveredProblems: 0 });
     try {
-      publishImported(
-        await importGames(username, databaseRef.current, publishImported, setProgress)
-      );
+      publishImported(await importGames(username, sourceDatabase, publishImported, setProgress));
     } finally {
       setIsSyncing(false);
       setProgress(null);
     }
+  };
+  const reset = () => {
+    const profile = databaseRef.current.profile;
+    if (!profile) {
+      return;
+    }
+    const cleared = clearDiaryData();
+    const temporary = { ...cleared, profile };
+    databaseRef.current = temporary;
+    setDatabase(temporary);
+    void sync(profile.username, cleared);
   };
   useEffect(() => {
     if (database.profile && !bootSynced.current) {
@@ -129,6 +143,22 @@ export function App() {
       closeProblem();
     }
   };
+  const recordFailure = (problem: ReviewProblem) => {
+    updateDatabase((current) => {
+      const latest = current.problems[problem.id] ?? problem;
+      return upsertProblem(current, applyReview(latest, 'failed'));
+    });
+  };
+  const advance = (problem: ReviewProblem) => {
+    const nextProblem = nextReviewProblem(
+      dueProblems(databaseRef.current).filter((candidate) => candidate.id !== problem.id)
+    );
+    if (nextProblem) {
+      openProblem(nextProblem.id);
+    } else {
+      closeProblem();
+    }
+  };
   if (!database.profile) {
     return <Setup onImport={sync} />;
   }
@@ -139,6 +169,8 @@ export function App() {
           database={database}
           problem={currentProblem}
           onClose={closeProblem}
+          onFail={recordFailure}
+          onAdvance={advance}
           onComplete={complete}
         />
       ) : (
@@ -153,6 +185,7 @@ export function App() {
             }
           }}
           onSync={() => void sync()}
+          onReset={reset}
         />
       )}
     </div>

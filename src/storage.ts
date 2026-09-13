@@ -44,21 +44,34 @@ export const loadDatabase = (): DiaryDatabase => {
       ])
     ) as DiaryDatabase['analyzedMatchIds'];
     const problems = Object.fromEntries(
-      Object.entries(parsed.problems ?? {}).map(([problemId, problem]) => [
-        problemId,
-        {
-          ...problem,
-          evaluationBeforeMove: problem.evaluationBeforeMove ?? problem.evaluation,
-          loss: problem.loss ?? asPawnEvaluation(0),
-          lastOutcome: problem.lastOutcome ?? null,
-        },
-      ])
+      Object.entries(parsed.problems ?? {}).map(([problemId, problem]) => {
+        const storedProblem = problem as Partial<ReviewProblem>;
+        const storedMateIn = (storedProblem as Record<string, unknown>)[
+          'evaluationBeforeMoveMateIn'
+        ];
+        return [
+          problemId,
+          {
+            ...storedProblem,
+            evaluationMateIn: storedProblem.evaluationMateIn ?? null,
+            evaluationBeforeMove: storedProblem.evaluationBeforeMove ?? storedProblem.evaluation,
+            evaluationBeforeMoveMateIn: typeof storedMateIn === 'number' ? storedMateIn : null,
+            loss: storedProblem.loss ?? asPawnEvaluation(0),
+            lastOutcome: storedProblem.lastOutcome ?? null,
+          },
+        ];
+      })
     ) as DiaryDatabase['problems'];
     return {
       profile: parsed.profile
         ? { ...parsed.profile, avatarUrl: parsed.profile.avatarUrl ?? null }
         : null,
-      matches: parsed.matches ?? {},
+      matches: Object.fromEntries(
+        Object.entries(parsed.matches ?? {}).map(([matchId, match]) => [
+          matchId,
+          { ...match, gameUrl: match.gameUrl ?? null },
+        ])
+      ),
       analyzedMatchIds,
       problems,
     };
@@ -74,6 +87,12 @@ export const loadLastUsername = (): string => localStorage.getItem(LAST_USERNAME
 
 export const saveLastUsername = (username: string): void =>
   localStorage.setItem(LAST_USERNAME_KEY, username);
+
+export const clearDiaryData = (): DiaryDatabase => {
+  localStorage.removeItem(STORAGE_KEY);
+  localStorage.removeItem(LAST_USERNAME_KEY);
+  return emptyDatabase();
+};
 
 export const upsertProfile = (database: DiaryDatabase, profile: PlayerProfile): DiaryDatabase => ({
   ...database,

@@ -1,4 +1,5 @@
-import { RefreshCw, Sparkles, UserRound } from 'lucide-react';
+import { RefreshCw, RotateCcw, Sparkles, UserRound } from 'lucide-react';
+import { useState } from 'react';
 import type { DiaryDatabase } from '../domain';
 import type { ImportProgress } from '../services/chessCom';
 import { dueProblems, passedProblemsToday } from '../storage';
@@ -9,26 +10,56 @@ interface DashboardProps {
   readonly progress: ImportProgress | null;
   readonly onReview: () => void;
   readonly onSync: () => void;
+  readonly onReset: () => void;
 }
 
-export function Dashboard({ database, isSyncing, progress, onReview, onSync }: DashboardProps) {
+export function Dashboard({
+  database,
+  isSyncing,
+  progress,
+  onReview,
+  onSync,
+  onReset,
+}: DashboardProps) {
   const due = dueProblems(database);
   const passedToday = passedProblemsToday(database);
+  const [isAccountMenuOpen, setIsAccountMenuOpen] = useState(false);
   return (
     <main className="dashboard">
       <header className="app-header">
         <div className="brand">
           blunder <span>diary</span>
         </div>
-        <button className="account-control" type="button" onClick={onSync} disabled={isSyncing}>
-          {isSyncing ? <span className="spinner compact" /> : <RefreshCw size={15} />}
-          {database.profile?.avatarUrl ? (
-            <img className="avatar" src={database.profile.avatarUrl} alt="" />
-          ) : (
-            <UserRound size={15} />
+        <div className="account-menu">
+          <button
+            className="icon-button"
+            type="button"
+            onClick={onSync}
+            disabled={isSyncing}
+            aria-label="Refresh games"
+            title="Refresh games"
+          >
+            {isSyncing ? <span className="spinner compact" /> : <RefreshCw size={15} />}
+          </button>
+          <button
+            className="account-control"
+            type="button"
+            onClick={() => setIsAccountMenuOpen((open) => !open)}
+            aria-expanded={isAccountMenuOpen}
+          >
+            {database.profile?.avatarUrl ? (
+              <img className="avatar" src={database.profile.avatarUrl} alt="" />
+            ) : (
+              <UserRound size={15} />
+            )}
+            <span>{database.profile?.username}</span>
+          </button>
+          {isAccountMenuOpen && (
+            <button className="reset-control" type="button" onClick={onReset}>
+              <RotateCcw size={15} /> Reset local data
+            </button>
           )}
-          <span>{database.profile?.username}</span>
-        </button>
+        </div>
       </header>
       <section className="queue-hero">
         <div>

@@ -14,18 +14,28 @@ import {
 } from './domain';
 
 export interface EngineEvaluation {
+  /** Score from White's perspective, regardless of the active side in the FEN. */
   readonly score: PawnEvaluation;
+  /** Positive means White mates; negative means Black mates. */
+  readonly mateIn: number | null;
   readonly bestMoves: readonly UciMove[];
 }
 
-const scoreFromInfo = (line: string): Centipawns | null => {
+interface ScoreUpdate {
+  readonly score: Centipawns;
+  readonly mateIn: number | null;
+}
+
+const scoreFromInfo = (line: string): ScoreUpdate | null => {
   const centipawn = line.match(/ score cp (-?\d+)/)?.[1];
-  if (centipawn) {
-    return asCentipawns(Number(centipawn));
+  if (centipawn !== undefined) {
+    return { score: asCentipawns(Number(centipawn)), mateIn: null };
   }
 
   const mate = line.match(/ score mate (-?\d+)/)?.[1];
-  return mate ? asCentipawns(Math.sign(Number(mate)) * 10_000) : null;
+  return mate === undefined
+    ? null
+    : { score: asCentipawns(Math.sign(Number(mate)) * 10_000), mateIn: Number(mate) };
 };
 
 const principalVariationFromInfo = (
@@ -39,6 +49,8 @@ export class StockfishEngine {
   private readonly worker = new Worker('/stockfish-18-lite-single.js');
   private pending: ((evaluation: EngineEvaluation) => void) | null = null;
   private latestScore = asCentipawns(0);
+  private latestMateIn: number | null = null;
+  private scoreMultiplier = 1;
   private bestMoves: UciMove[] = [];
 
   private constructor() {}
@@ -56,6 +68,8 @@ export class StockfishEngine {
     }
 
     this.latestScore = asCentipawns(0);
+    this.latestMateIn = null;
+    this.scoreMultiplier = fen.split(' ')[1] === 'b' ? -1 : 1;
     this.bestMoves = [];
     return new Promise<EngineEvaluation>((resolve) => {
       this.pending = resolve;
@@ -99,7 +113,8 @@ export class StockfishEngine {
       const score = scoreFromInfo(line);
       const variation = principalVariationFromInfo(line);
       if (score !== null && (!variation || variation.index === 1)) {
-        this.latestScore = score;
+        this.latestScore = score.score;
+        this.latestMateIn = score.mateIn;
       }
       if (variation) {
         this.bestMoves[variation.index - 1] = variation.move;
@@ -110,8 +125,10 @@ export class StockfishEngine {
     if (line.startsWith('bestmove') && this.pending) {
       const resolve = this.pending;
       this.pending = null;
+      const terminalMateScore = this.latestMateIn === 0 ? asCentipawns(-10_000) : this.latestScore;
       resolve({
-        score: asPawnEvaluation(this.latestScore / CENTIPAWNS_PER_PAWN),
+        score: asPawnEvaluation((terminalMateScore / CENTIPAWNS_PER_PAWN) * this.scoreMultiplier),
+        mateIn: this.latestMateIn === null ? null : this.latestMateIn * this.scoreMultiplier,
         bestMoves: this.bestMoves.filter((move): move is UciMove => Boolean(move)),
       });
     }
